@@ -1,0 +1,112 @@
+controller
+@PostMapping(value = "api" )
+	public void readtxt(@RequestParam("file") MultipartFile file) {
+	    String token = request.getHeader("Token");
+	    token=token.substring(5);
+	    String username = jwtService.getUsernameFromToken(token.trim());
+		Map<Integer, Object> map = new HashMap<>();
+	    String pathToSave = uploadService.saveFileVer(file, ConstantPage.PATH_SAVE_EXAM_UPLOAD);
+	    String[] formatFile = pathToSave.split("\\.");
+	    int len = formatFile.length - 1;
+	    questionService.readFileTxt(servletContext.getRealPath(ConstantPage.PATH_SAVE_EXAM_UPLOAD) + "/" + pathToSave, username);
+	    if(formatFile[len].equals("txt")) {
+		    try {
+		    	questionService.readFileTxt(servletContext.getRealPath(ConstantPage.PATH_SAVE_EXAM_UPLOAD) + "/" + pathToSave, username);
+			} catch (Exception e) {
+				throw new CustomError.GeneralError("Tru?ng d? li?u không dúng theo file m?u!");
+			}
+	    } else {
+	    	throw new CustomError.GeneralError("File không dúng d?nh d?ng. B?n ph?i ch?n file txt!");
+	    }
+	}
+
+impl
+
+@Override
+	public void readFileTxt(String excelFilePath, String username) {
+		Scanner input = null;
+		try {
+			input = new Scanner(new File(excelFilePath));
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+	    input.useDelimiter("-|\n");
+	    Question question = new Question();
+	    Users users = usersService.findByEmail(username);
+	    Date date = new Date();
+	    java.sql.Date sqlDate = new java.sql.Date(date.getTime());
+	    while(input.hasNext()) {
+	    	try {
+	    		while (true) {
+		    		String[] contentQuestion = input.next().split(":");
+			    	 question.setContent(contentQuestion[1]);
+			    	 String[] contentTitle = input.next().split(":");
+			    	 question.setTitle(contentTitle[1]);
+			    	String[] contentSubjectId = input.next().split(":");
+			    	Subject sb = subjectService.findSubjectById(Integer.parseInt(contentSubjectId[1].trim()));
+					if(sb != null) {
+						question.setSubject(sb);
+					} else {
+						continue;
+					}
+			    	String[] contentChapterId = input.next().split(":");
+			    	Chapter chapter = chapterService.findChapterById(Integer.parseInt(contentChapterId[1].trim()));
+					if(chapter != null){
+						question.setChapter(chapter);
+					} else {
+						continue;
+					}
+			    	String[] contentDomainId = input.next().split(":");
+			    	Domain domain = domainService.finDomainById(Integer.parseInt(contentDomainId[1].trim()));
+					if(domain != null ) {
+						question.setDomain(domain);
+					} else {
+						continue;
+					}
+					String subjectName = sb.getName();
+					String[] strings = subjectName.split(" ");
+					String alphabet = "";
+			        for(int i = 0; i < strings.length; i++){
+			        	alphabet += strings[i].charAt(0);
+			        }
+					Random rand = new Random(); 
+					int number = rand.nextInt(9999);
+					question.setCode(alphabet.toUpperCase() + number);
+					
+			    	String[] contentSourse = input.next().split(":");
+			    	question.setSourse(contentSourse[1]);
+			    	String[] contentPage = input.next().split(":");
+			    	question.setPage(Integer.parseInt(contentPage[1].trim()));
+			    	question.setMedia(" ");
+					question.setCreated_at(sqlDate);
+					question.setCreator_id(users.getId());
+			    	String[] contentAsws = input.next().split(":");
+			    	String Asws = contentAsws[1].trim();
+			    	String[] correct = Asws.split(",");
+			    	int[] integers = new int[correct.length];
+			    	for (int i = 0; i < integers.length; i++) {
+						integers[i] = Integer.parseInt(correct[i]);
+					}
+			    	List<String> as = new ArrayList<>();
+			    	String contentAs;
+			    	int answer = 1; 
+			    	do {
+			    		contentAs = input.next();
+			    		if(!contentAs.trim().isEmpty()) {
+			    			as.add(contentAs.split(":")[1]);
+			    			Answer_Option answer_Option = new Answer_Option();
+							answer_Option.setCreated_at(sqlDate);
+							answer_Option.setQuestion(question);
+							answer_Option.setContent(contentAs.split(":")[1]);
+							answer_Option.setCorrect(contains(integers, answer));
+							answerService.save(answer_Option);
+							answer++;
+			    		}
+					} while (!contentAs.trim().isEmpty());
+				}
+			} catch (Exception e) {
+				e.printStackTrace();
+			}	    		
+	    }
+
+	}
